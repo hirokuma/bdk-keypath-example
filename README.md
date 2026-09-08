@@ -28,8 +28,10 @@ done.
 
 ```shell
 $ cargo run --example cli -- create
+$ cargo run --example cli -- newaddr
+$ cargo run --example cli -- balance
 ```
 
 ```shell
-$ cargo run --example clie --features "tracing" -- create
+$ cargo run --example cli --features "tracing" -- create
 ```

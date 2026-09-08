@@ -1,10 +1,10 @@
+mod wrapper;
+
 use std::path::Path;
 
 use anyhow::Result;
-use btc_wallet::{self, BtcWallet};
 use clap::{CommandFactory, Parser, Subcommand};
 use tracing::*;
-use wallet_utils::encdec;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -63,13 +63,9 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    let priv_path = Path::new("./sample-privkey.txt");
     let config = btc_wallet::load_config(Path::new("./config.toml"))
         .inspect_err(|e| error!("load_config: {e}"))?;
     let passphrase = "SuperSecurePassword123!";
-    let save_privkey =
-        |path: &Path, xprv: &str| encdec::save_encoded_private_key(path, xprv, passphrase);
-    let load_privkey = |path: &Path| encdec::load_encoded_private_key(path, passphrase);
     let wallet_path = Path::new("sample-wallet.bdk");
 
     match cli.command {
@@ -79,15 +75,13 @@ fn main() -> Result<()> {
             println!();
         }
         Some(Commands::Create) => {
-            let (wallet, xprv) =
-                BtcWallet::create(config, wallet_path).inspect_err(|e| error!("create: {e}"))?;
-            save_privkey(priv_path, &xprv)?;
+            let wallet = wrapper::create_wallet(config, passphrase, wallet_path.into())
+                .inspect_err(|e| error!("create: {e}"))?;
             println!("wallet created: {}", wallet.config.network);
         }
         Some(Commands::Balance) => {
-            let xprv = load_privkey(priv_path)?;
-            let wallet =
-                BtcWallet::load(config, &xprv, wallet_path).inspect_err(|e| error!("load: {e}"))?;
+            let wallet = wrapper::load_wallet(config, passphrase, wallet_path.into())
+                .inspect_err(|e| error!("load: {e}"))?;
             let balance = wallet.balance();
             println!("balance: {}", balance);
         }
@@ -95,9 +89,8 @@ fn main() -> Result<()> {
             todo!();
         }
         Some(Commands::NewAddr) => {
-            let xprv = load_privkey(priv_path)?;
-            let mut wallet =
-                BtcWallet::load(config, &xprv, wallet_path).inspect_err(|e| error!("load: {e}"))?;
+            let mut wallet = wrapper::load_wallet(config, passphrase, wallet_path.into())
+                .inspect_err(|e| error!("load: {e}"))?;
             let new_addr = wallet.new_address()?;
             println!("new address: {}", new_addr);
         }
@@ -110,9 +103,8 @@ fn main() -> Result<()> {
             amount,
             fee_rate,
         }) => {
-            let xprv = load_privkey(priv_path)?;
-            let mut wallet =
-                BtcWallet::load(config, &xprv, wallet_path).inspect_err(|e| error!("load: {e}"))?;
+            let mut wallet = wrapper::load_wallet(config, passphrase, wallet_path.into())
+                .inspect_err(|e| error!("load: {e}"))?;
             let out_addr = wallet.parse_address(&out_addr)?;
             let tx = wallet
                 .create_tx(&out_addr, amount, fee_rate)
@@ -125,9 +117,8 @@ fn main() -> Result<()> {
             amount,
             fee_rate,
         }) => {
-            let xprv = load_privkey(priv_path)?;
-            let mut wallet =
-                BtcWallet::load(config, &xprv, wallet_path).inspect_err(|e| error!("load: {e}"))?;
+            let mut wallet = wrapper::load_wallet(config, passphrase, wallet_path.into())
+                .inspect_err(|e| error!("load: {e}"))?;
             let out_addr = wallet.parse_address(&out_addr)?;
             let tx = wallet
                 .create_tx_single_anypay(&out_addr, amount, fee_rate)
@@ -136,9 +127,8 @@ fn main() -> Result<()> {
             println!("raw_tx: {}", btc_wallet::to_tx_hex(&tx));
         }
         Some(Commands::SendRawTx { tx_hex }) => {
-            let xprv = load_privkey(priv_path)?;
-            let wallet =
-                BtcWallet::load(config, &xprv, wallet_path).inspect_err(|e| error!("load: {e}"))?;
+            let wallet = wrapper::load_wallet(config, passphrase, wallet_path.into())
+                .inspect_err(|e| error!("load: {e}"))?;
             let tx = btc_wallet::parse_tx_hex(&tx_hex).inspect_err(|e| error!("to_hex: {e}"))?;
             let txid = wallet
                 .send_tx(&tx)
