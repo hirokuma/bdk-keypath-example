@@ -6,6 +6,8 @@ use anyhow::Result;
 use clap::{CommandFactory, Parser, Subcommand};
 use tracing::*;
 
+use wrapper::WalletWrapper;
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
@@ -75,21 +77,26 @@ fn main() -> Result<()> {
             println!();
         }
         Some(Commands::Create) => {
-            let wallet = wrapper::create_wallet(config, passphrase, wallet_path.into())
-                .inspect_err(|e| error!("create: {e}"))?;
-            println!("wallet created: {}", wallet.config.network);
+            let _wallet = WalletWrapper::create_wallet(
+                config.network.to_string().as_str(),
+                config.electrum.server.as_str(),
+                passphrase,
+                wallet_path.into(),
+            )
+            .inspect_err(|e| error!("create: {e}"))?;
+            println!("wallet created");
         }
         Some(Commands::Balance) => {
-            let wallet = wrapper::load_wallet(config, passphrase, wallet_path.into())
+            let wallet = WalletWrapper::load_wallet(passphrase, wallet_path.into())
                 .inspect_err(|e| error!("load: {e}"))?;
-            let balance = wallet.balance();
+            let balance = wallet.balance()?;
             println!("balance: {}", balance);
         }
         Some(Commands::Addrs) => {
             todo!();
         }
         Some(Commands::NewAddr) => {
-            let mut wallet = wrapper::load_wallet(config, passphrase, wallet_path.into())
+            let mut wallet = WalletWrapper::load_wallet(passphrase, wallet_path.into())
                 .inspect_err(|e| error!("load: {e}"))?;
             let new_addr = wallet.new_address()?;
             println!("new address: {}", new_addr);
@@ -103,35 +110,32 @@ fn main() -> Result<()> {
             amount,
             fee_rate,
         }) => {
-            let mut wallet = wrapper::load_wallet(config, passphrase, wallet_path.into())
+            let mut wallet = WalletWrapper::load_wallet(passphrase, wallet_path.into())
                 .inspect_err(|e| error!("load: {e}"))?;
-            let out_addr = wallet.parse_address(&out_addr)?;
-            let tx = wallet
-                .create_tx(&out_addr, amount, fee_rate)
+            let result = wallet
+                .send_tx(&out_addr, amount, fee_rate)
                 .inspect_err(|e| error!("create_tx: {e}"))?;
-            println!("tx: {:#?}", tx);
-            println!("raw_tx: {}", btc_wallet::to_tx_hex(&tx));
+            println!("raw_tx: {}", result.tx);
+            println!("txid: {}", result.txid);
         }
         Some(Commands::SpendSingle {
             out_addr,
             amount,
             fee_rate,
         }) => {
-            let mut wallet = wrapper::load_wallet(config, passphrase, wallet_path.into())
+            let mut wallet = WalletWrapper::load_wallet(passphrase, wallet_path.into())
                 .inspect_err(|e| error!("load: {e}"))?;
-            let out_addr = wallet.parse_address(&out_addr)?;
-            let tx = wallet
-                .create_tx_single_anypay(&out_addr, amount, fee_rate)
+            let result = wallet
+                .send_tx_single_anypay(&out_addr, amount, fee_rate)
                 .inspect_err(|e| error!("create_tx: {e}"))?;
-            println!("tx: {:#?}", tx);
-            println!("raw_tx: {}", btc_wallet::to_tx_hex(&tx));
+            println!("raw_tx: {}", result.tx);
+            println!("txid: {}", result.txid);
         }
         Some(Commands::SendRawTx { tx_hex }) => {
-            let wallet = wrapper::load_wallet(config, passphrase, wallet_path.into())
+            let wallet = WalletWrapper::load_wallet(passphrase, wallet_path.into())
                 .inspect_err(|e| error!("load: {e}"))?;
-            let tx = btc_wallet::parse_tx_hex(&tx_hex).inspect_err(|e| error!("to_hex: {e}"))?;
             let txid = wallet
-                .send_tx(&tx)
+                .send_raw_tx(&tx_hex)
                 .inspect_err(|e| error!("send_tx: {e}"))?;
             println!("txid: {}", txid);
         }
